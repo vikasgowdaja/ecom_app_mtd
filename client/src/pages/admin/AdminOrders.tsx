@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -8,7 +9,6 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ShoppingBag } from "lucide-react"
-import { useState } from "react"
 import {
   Dialog,
   DialogClose,
@@ -27,17 +27,58 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-const AdminOrders = () => {
+import { allOrders } from "@/api/api" // your backend already returns userName & address
 
+const AdminOrders = () => {
+  const [orders, setOrders] = useState<any[]>([])
   const [editOpen, setEditOpen] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState<any | null>(null)
+  const [newStatus, setNewStatus] = useState<string>("")
+
+  // Fetch orders (already contains userName & address)
+  useEffect(() => {
+    fetchOrders()
+  }, [])
+
+  const fetchOrders = async () => {
+    try {
+      const res = await allOrders()
+      setOrders(res.data) // userName & address already included
+    } catch (err) {
+      console.error("Error fetching orders:", err)
+    }
+  }
+
+  const handleOpenDialog = (order: any) => {
+    setSelectedOrder(order)
+    setNewStatus(order.status)
+    setEditOpen(true)
+  }
+
+  const handleSaveChanges = async () => {
+    if (!selectedOrder) return
+
+    try {
+      await fetch(`${process.env.REACT_APP_API_URL}/orders/update/${selectedOrder.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      fetchOrders()
+      setEditOpen(false)
+    } catch (err) {
+      console.error("Error updating order:", err)
+    }
+  }
+
   return (
     <div className="p-4 flex justify-center items-center w-full flex-col gap-4">
       <div className="w-full flex flex-row">
         <div className="w-1/2 flex justify-start items-center">
-          <h2 className="font-bold ">Orders</h2>
+          <h2 className="font-bold">Orders</h2>
         </div>
-
       </div>
+
       <Table className="w-full bg-gray-50 p-4 rounded-md">
         <TableHeader className="bg-gray-300">
           <TableRow>
@@ -51,30 +92,44 @@ const AdminOrders = () => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          <TableRow>
-            <TableCell className="font-medium">Mohanraj</TableCell>
-            <TableCell >Phone 1 ,phone 2</TableCell>
-            <TableCell>400000</TableCell>
-            <TableCell>Delivered</TableCell>
-            <TableCell>02/04.2026</TableCell>
-            <TableCell>1/11,state,111-222</TableCell>
-            <TableCell className="text-right">
-              <Button className="border-2 border-cyan-600 cursor-pointer" variant='outline' onClick={() => { setEditOpen(true) }}>
-                <ShoppingBag className="h-8 w-8 text-cyan-600" />
-              </Button>
-            </TableCell>
-          </TableRow>
+          {orders.map((order: any) => (
+            <TableRow key={order.id}>
+              <TableCell className="font-medium">{order.userName}</TableCell>
+              <TableCell>
+                {order.items?.map((i: any) => i.productId).join(", ")}
+              </TableCell>
+              <TableCell>{order.totalAmount}</TableCell>
+              <TableCell>{order.status}</TableCell>
+              <TableCell>{order.createdAt || "N/A"}</TableCell>
+              <TableCell>{order.address}</TableCell>
+              <TableCell className="text-right">
+                <Button
+                  className="border-2 border-cyan-600 cursor-pointer"
+                  variant="outline"
+                  onClick={() => handleOpenDialog(order)}
+                >
+                  <ShoppingBag className="h-8 w-8 text-cyan-600" />
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
         </TableBody>
       </Table>
 
-      <Dialog open={editOpen}>
-        <form>
+      {/* Edit Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            handleSaveChanges()
+          }}
+        >
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>Update Status</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4">
-              <Select>
+              <Select value={newStatus} onValueChange={setNewStatus}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Order Status" />
                 </SelectTrigger>
@@ -90,12 +145,17 @@ const AdminOrders = () => {
               </Select>
               <div className="grid gap-3">
                 <p>Address </p>
-                <p className="font-semibold">1/22</p>
+                <p className="font-semibold">{selectedOrder?.address}</p>
               </div>
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline" onClick={() => { setEditOpen(false) }}>Cancel</Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setEditOpen(false)}
+                >
+                  Cancel
+                </Button>
               </DialogClose>
               <Button type="submit">Save changes</Button>
             </DialogFooter>
